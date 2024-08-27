@@ -1,0 +1,13 @@
+src/
+tests/
+bun.lockb
+.env
+.dev.vars
+.gitignore
+.eslintrc
+.eslintignore
+.npmignore
+eslint.config.mjs
+tsconfig.json
+tsconfig.eslint.json
+vitest.config.ts

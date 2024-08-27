@@ -1,0 +1,30 @@
+{
+	"name": "@dmitryrechkin/json-schema-to-zod",
+	"type": "module",
+	"version": "1.0.0",
+	"main": "dist/index.js",
+	"types": "dist/index.d.ts",
+	"scripts": {
+		"lint": "eslint .",
+		"format": "eslint --fix .",
+		"test": "vitest run",
+		"check": "tsc --noEmit",
+		"build": "shx rm -rf dist && tsc && fix-esm-import-path dist",
+		"package:publish": "pnpm publish --access public",
+		"prepublishOnly": "pnpm run build"
+	},
+	"devDependencies": {
+		"fix-esm-import-path": "^1.0.1",
+		"@dmitryrechkin/eslint-standard": "^1.0.7",
+		"dotenv": "^16.4.5",
+		"eslint": "^8.0.0",
+		"eslint-plugin-unused-imports": "^3.0.0",
+		"tsconfig-paths": "^4.2.0",
+		"typescript": "^5.5.3",
+		"vitest": "^0.24.5",
+		"shx": "^0.3.4"
+	},
+	"dependencies": {
+		"zod": "^3.23.8"
+	}
+}
