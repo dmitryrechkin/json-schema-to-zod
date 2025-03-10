@@ -1,5 +1,5 @@
 export type JSONSchema = {
-	type?: string;
+	type?: string | string[];
 	properties?: Record<string, JSONSchema>;
 	items?: JSONSchema | JSONSchema[];
 	required?: string[];
