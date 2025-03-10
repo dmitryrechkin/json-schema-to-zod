@@ -1,5 +1,5 @@
 import { z, ZodSchema, type ZodTypeAny } from 'zod';
-import { type JSONSchema } from './Type';
+import { type JSONSchema, type JSONValue, type JSONObject } from './Type';
 
 export class JSONSchemaToZod
 {
@@ -17,11 +17,11 @@ export class JSONSchemaToZod
 	/**
 	 * Checks if data matches a condition schema.
 	 *
-	 * @param {any} data - The data to check.
+	 * @param {JSONValue} data - The data to check.
 	 * @param {JSONSchema} condition - The condition schema.
 	 * @returns {boolean} - Whether the data matches the condition.
 	 */
-	private static matchesCondition(data: any, condition: JSONSchema): boolean
+	private static matchesCondition(data: JSONValue, condition: JSONSchema): boolean
 	{
 		// If no properties to check, condition is met
 		if (!condition.properties)
@@ -29,11 +29,20 @@ export class JSONSchemaToZod
 			return true;
 		}
 
+		// If data is not an object or is null, it can't match a schema with properties
+		if (typeof data !== 'object' || data === null || Array.isArray(data))
+		{
+			return false;
+		}
+
+		// Now we know data is a JSONObject
+		const objectData = data as JSONObject;
+
 		// Check all property conditions
 		for (const [key, propCondition] of Object.entries(condition.properties))
 		{
 			// If property doesn't exist in data
-			if (!(key in data))
+			if (!(key in objectData))
 			{
 				// If there's a const condition and property is missing, it doesn't match
 				if ('const' in propCondition)
@@ -45,20 +54,22 @@ export class JSONSchemaToZod
 				continue;
 			}
 
+			const value = objectData[key];
+
 			// Check for const condition
-			if ('const' in propCondition && data[key] !== propCondition['const'])
+			if ('const' in propCondition && value !== propCondition['const'])
 			{
 				return false;
 			}
 
 			// Check for minimum condition
-			if ('minimum' in propCondition && data[key] < propCondition['minimum'])
+			if ('minimum' in propCondition && typeof value === 'number' && value < propCondition['minimum'])
 			{
 				return false;
 			}
 
 			// Check for maximum condition
-			if ('maximum' in propCondition && data[key] > propCondition['maximum'])
+			if ('maximum' in propCondition && typeof value === 'number' && value > propCondition['maximum'])
 			{
 				return false;
 			}
@@ -70,11 +81,11 @@ export class JSONSchemaToZod
 	/**
 	 * Validates data against a conditional schema and adds issues to context if validation fails.
 	 *
-	 * @param {any} data - The data to validate.
+	 * @param {JSONValue} data - The data to validate.
 	 * @param {JSONSchema} schema - The conditional schema.
 	 * @param {z.RefinementCtx} ctx - The Zod refinement context.
 	 */
-	private static validateConditionalSchema(data: any, schema: JSONSchema, ctx: z.RefinementCtx): void
+	private static validateConditionalSchema(data: JSONValue, schema: JSONSchema, ctx: z.RefinementCtx): void
 	{
 		this.validateRequiredProperties(data, schema, ctx);
 		this.validatePropertyPatterns(data, schema, ctx);
@@ -84,17 +95,32 @@ export class JSONSchemaToZod
 	/**
 	 * Validates that all required properties are present in the data.
 	 *
-	 * @param {any} data - The data to validate.
+	 * @param {JSONValue} data - The data to validate.
 	 * @param {JSONSchema} schema - The schema containing required properties.
 	 * @param {z.RefinementCtx} ctx - The Zod refinement context.
 	 */
-	private static validateRequiredProperties(data: any, schema: JSONSchema, ctx: z.RefinementCtx): void
+	private static validateRequiredProperties(data: JSONValue, schema: JSONSchema, ctx: z.RefinementCtx): void
 	{
 		if (!schema.required)
 		{
 			return;
 		}
 
+		// If data is not an object or is null, all required properties are missing
+		if (typeof data !== 'object' || data === null)
+		{
+			for (const requiredProp of schema.required)
+			{
+				ctx.addIssue({
+					code: z.ZodIssueCode.custom,
+					message: `Required property '${requiredProp}' is missing`,
+					path: [requiredProp]
+				});
+			}
+			return;
+		}
+
+		// Now we know data is an object (either a plain object or an array)
 		for (const requiredProp of schema.required)
 		{
 			if (!(requiredProp in data))
@@ -111,34 +137,52 @@ export class JSONSchemaToZod
 	/**
 	 * Validates property patterns for string properties.
 	 *
-	 * @param {any} data - The data to validate.
+	 * @param {JSONValue} data - The data to validate.
 	 * @param {JSONSchema} schema - The schema containing property patterns.
 	 * @param {z.RefinementCtx} ctx - The Zod refinement context.
 	 */
-	private static validatePropertyPatterns(data: any, schema: JSONSchema, ctx: z.RefinementCtx): void
+	private static validatePropertyPatterns(data: JSONValue, schema: JSONSchema, ctx: z.RefinementCtx): void
 	{
 		if (!schema.properties)
 		{
 			return;
 		}
 
+		// If data is not an object or is null, we can't validate property patterns
+		if (typeof data !== 'object' || data === null)
+		{
+			return;
+		}
+
+		// If data is an array, we can't validate property patterns
+		if (Array.isArray(data))
+		{
+			return;
+		}
+
+		// Now we know data is a JSONObject
+		const objectData = data as JSONObject;
+
+		// Process each property in the schema
 		for (const [key, propSchema] of Object.entries(schema.properties))
 		{
 			// Skip if property doesn't exist in data
-			if (!(key in data))
+			if (!(key in objectData))
 			{
 				continue;
 			}
 
+			const value = objectData[key];
+
 			// Check pattern validation for strings
-			if (propSchema['pattern'] && typeof data[key] === 'string')
+			if (propSchema['pattern'] && typeof value === 'string')
 			{
 				const regex = new RegExp(propSchema['pattern']);
-				if (!regex.test(data[key]))
+				if (!regex.test(value))
 				{
 					ctx.addIssue({
 						code: z.ZodIssueCode.custom,
-						message: `String '${data[key]}' does not match pattern '${propSchema['pattern']}'`,
+						message: `String '${value}' does not match pattern '${propSchema['pattern']}'`,
 						path: [key]
 					});
 				}
@@ -149,11 +193,11 @@ export class JSONSchemaToZod
 	/**
 	 * Validates nested if-then-else conditions.
 	 *
-	 * @param {any} data - The data to validate.
+	 * @param {JSONValue} data - The data to validate.
 	 * @param {JSONSchema} schema - The schema containing if-then-else conditions.
 	 * @param {z.RefinementCtx} ctx - The Zod refinement context.
 	 */
-	private static validateNestedConditions(data: any, schema: JSONSchema, ctx: z.RefinementCtx): void
+	private static validateNestedConditions(data: JSONValue, schema: JSONSchema, ctx: z.RefinementCtx): void
 	{
 		if (!schema['if'] || !schema['then'])
 		{
@@ -744,13 +788,27 @@ export class JSONSchemaToZod
 	/**
 	 * Applies default values from schema properties to data object.
 	 *
-	 * @param {any} data - The original data object.
+	 * @param {JSONValue} data - The original data object.
 	 * @param {JSONSchema} schema - The schema with default values.
-	 * @returns {any} - The data object with defaults applied.
+	 * @returns {JSONValue} - The data object with defaults applied.
 	 */
-	private static applyDefaultValues(data: any, schema: JSONSchema): any
+	private static applyDefaultValues(data: JSONValue, schema: JSONSchema): JSONValue
 	{
-		const dataWithDefaults = { ...data };
+		// If data is not an object or is null, we can't apply defaults
+		if (typeof data !== 'object' || data === null)
+		{
+			return data;
+		}
+
+		// If data is an array, we can't apply defaults from schema properties
+		if (Array.isArray(data))
+		{
+			return data;
+		}
+
+		// Now we know data is a JSONObject
+		const objectData = data as JSONObject;
+		const dataWithDefaults = { ...objectData };
 
 		if (!schema.properties)
 		{

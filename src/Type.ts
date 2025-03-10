@@ -1,3 +1,21 @@
+/**
+ * Represents any valid JSON value.
+ */
+export type JSONValue =
+	| string
+	| number
+	| boolean
+	| null
+	| JSONObject
+	| JSONValue[];
+
+/**
+ * Represents a JSON object.
+ */
+export type JSONObject = {
+	[key: string]: JSONValue
+};
+
 export type JSONSchema = {
 	type?: string | string[];
 	properties?: Record<string, JSONSchema>;
